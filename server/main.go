@@ -14,7 +14,7 @@ import (
 var mutex sync.Mutex
 var userInput string = ""
 
-func uploadHandler(w http.ResponseWriter, r *http.Request, index int) {
+func uploadHandler(w http.ResponseWriter, r *http.Request) {
 	// 1. Get the custom instruction from the HTTP header
 	mediaType := r.Header.Get("X-Media-Type")
 	fileName := r.Header.Get("X-File-Name")
@@ -40,14 +40,15 @@ func uploadHandler(w http.ResponseWriter, r *http.Request, index int) {
 
 func commandHandler(w http.ResponseWriter, r *http.Request) {
 	mutex.Lock()
-	defer mutex.Unlock()
-
-	if userInput == "" {
+	if userInput == "" || userInput == "idle" {
 		fmt.Fprint(w, "idle")
-	} else {
-		fmt.Fprint(w, userInput)
-		userInput = ""
 	}
+	if userInput == "ss" {
+		fmt.Fprint(w, "screenshot")
+		userInput = ""
+		fmt.Println("sending screenshot command")
+	}
+	defer mutex.Unlock()
 }
 
 func reveiveInput() {
@@ -55,7 +56,7 @@ func reveiveInput() {
 
 	for scanner.Scan() {
 		mutex.Lock()
-		userInput := scanner.Text()
+		userInput = scanner.Text()
 		mutex.Unlock()
 		fmt.Println("Queued command:", userInput)
 	}
@@ -67,6 +68,8 @@ func reveiveInput() {
 }
 
 func main() {
+	http.HandleFunc("/upload", uploadHandler)
+	http.HandleFunc("/get-command", commandHandler)
 
 	go reveiveInput()
 	fmt.Println("Receiver running on port 10000. Waiting for media...")

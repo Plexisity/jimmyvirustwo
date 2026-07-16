@@ -124,6 +124,9 @@ func main() {
 				index++
 			}
 
+			default
+			time.Sleep(2.5 * time.second)
+
 		}
 	}
 }

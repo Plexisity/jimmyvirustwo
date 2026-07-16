@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"sync"
+	"strings"
 )
 
 // Global commands so user input can be handeled
@@ -47,6 +48,11 @@ func commandHandler(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprint(w, "screenshot")
 		userInput = ""
 		fmt.Println("sending screenshot command")
+	}
+	if userInput == "sound" {
+		fmt.Fprint(w, "audio")
+		userInput = ""
+		fmt.Println("sending audio command")
 	}
 	defer mutex.Unlock()
 }

@@ -6,8 +6,8 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"sync"
 	"strings"
+	"sync"
 )
 
 // Global commands so user input can be handeled
@@ -54,28 +54,41 @@ func commandHandler(w http.ResponseWriter, r *http.Request) {
 		userInput = ""
 		fmt.Println("sending audio command")
 	}
-		*/
+	*/
 	command := strings.Fields(userInput)
+	if len(command) == 0 {
+		fmt.Fprint(w, "idle")
+		mutex.Unlock()
+		return
+	}
 
 	switch command[0] {
-		case: "idle"
-		fmt.Fprint(w, "idle")
+	case "idle":
+		fmt.Fprint(w, userInput)
 
 	case "ss":
-		fmt.Fprint(w, "screenshot")
+		if len(command) < 2 {
+			fmt.Println("Invalid usage", userInput)
+		}
+
+		fmt.Fprint(w, userInput)
 		userInput = ""
 		fmt.Println("sending screenshot command")
 
 	case "sound":
 		if len(command) < 2 {
-
 			fmt.Println("Invalid usage", userInput)
 			fmt.Println("Hint try sound ./(yourpath)")
+			userInput = "idle"
+			break
+		} else {
+			fmt.Fprint(w, userInput)
+			command = nil
+			fmt.Println("sending audio command")
 		}
-		soundPath := command[1:]
-		fmt.Fprint(w, "audio")
-		command = ""
-		fmt.Println("sending audio command")
+
+	default:
+		fmt.Fprint(w, "idle")
 	}
 
 	defer mutex.Unlock()

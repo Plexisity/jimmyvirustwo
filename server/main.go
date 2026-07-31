@@ -7,13 +7,72 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"runtime"
 	"sync"
+	"time"
+	"os/exec"
+	"context"
+//	"regexp"
 )
 
 // Global commands so user input can be handeled
 
 var mutex sync.Mutex
 var userInput string = ""
+
+
+func ensureCloudflared() string {
+	// Name the binary appropriately for Windows vs Linux
+	binName := "cloudflared"
+	if runtime.GOOS == "windows" {
+		binName = "cloudflared.exe"
+	}
+
+	// If it doesn't exist locally, download it automatically
+	if _, err := os.Stat(binName); os.IsNotExist(err) {
+		fmt.Printf("Downloading cloudflared for %s/%s...\n", runtime.GOOS, runtime.GOARCH)
+
+		// Map Go runtime architecture names to Cloudflare's release asset names
+		arch := runtime.GOARCH
+		if arch == "amd64" {
+			arch = "amd64"
+		} else if arch == "386" {
+			arch = "386"
+		} else if arch == "arm64" {
+			arch = "arm64"
+		}
+
+		url := fmt.Sprintf("https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-%s-%s", runtime.GOOS, arch)
+		if runtime.GOOS == "windows" {
+			url += ".exe"
+		}
+
+		resp, err := http.Get(url)
+		if err != nil {
+			panic(fmt.Sprintf("Failed to download cloudflared: %v", err))
+		}
+		defer resp.Body.Close()
+
+		out, err := os.Create(binName)
+		if err != nil {
+			panic(fmt.Sprintf("Failed to create binary file: %v", err))
+		}
+		defer out.Close()
+
+		_, err = io.Copy(out, resp.Body)
+		if err != nil {
+			panic(fmt.Sprintf("Failed to save binary: %v", err))
+		}
+
+		// Make executable on Linux/Unix
+		if runtime.GOOS != "windows" {
+			os.Chmod(binName, 0755)
+		}
+		fmt.Println("Cloudflared downloaded successfully.")
+	}
+
+	return binName
+}
 
 func uploadHandler(w http.ResponseWriter, r *http.Request) {
 	// 1. Get the custom instruction from the HTTP header
@@ -94,6 +153,11 @@ func commandHandler(w http.ResponseWriter, r *http.Request) {
 	defer mutex.Unlock()
 }
 
+func useRegex(s string) bool {
+	re := regexp.MustCompile("https://[a-z0-9-]+[.]trycloudflare[.]com")
+	return re.MatchString(s)
+}
+
 func reveiveInput() {
 	scanner := bufio.NewScanner(os.Stdin)
 
@@ -111,6 +175,27 @@ func reveiveInput() {
 }
 
 func main() {
+	// 1. Ensure the binary is present locally without needing a package manager
+	binPath := ensureCloudflared()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// 2. Start cloudflared targeting your local server port
+	cmd := exec.CommandContext(ctx, "./"+binPath, "tunnel", "--protocol", "http2", "--url", "http://localhost:10000")
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	
+	
+	if err := cmd.Start(); err != nil {
+		fmt.Printf("Failed to start cloudflared: %v\n", err)
+		return
+	}
+	
+
+	time.Sleep(2 * time.Second)
+	fmt.Println("Tunnel is active. Press Ctrl+C to exit.")
+
 	http.HandleFunc("/upload", uploadHandler)
 	http.HandleFunc("/get-command", commandHandler)
 

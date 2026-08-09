@@ -207,6 +207,7 @@ func main() {
 				fmt.Println("Playing sound...")
 				playSound(command[1])
 				fmt.Println("Sound playback finished. Deleting sound file...")
+				time.Sleep(1 * time.Second)
 				err = os.Remove(command[1])
 				if err != nil {
 					fmt.Println("Error deleting sound file:", err)

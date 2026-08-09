@@ -1,17 +1,17 @@
 # JimmyVirus Two
 
-A remote command and control system using Cloudflare tunneling and GitHub gists for URL distribution. No vibecoding used (except the readme markdown).
+A remote command and control system using Cloudflare tunneling and gitlab repos for URL distribution. No vibecoding used (except the readme markdown).
 
 ## Overview
 
-**Server**: Starts a local HTTP server, creates a Cloudflare tunnel, and updates a GitHub gist with the tunnel URL.
+**Server**: Starts a local HTTP server, creates a Cloudflare tunnel, and updates a gitlab repo with the tunnel URL.
 
 **Client**: Fetches the tunnel URL from the gist and connects to execute remote commands (screenshots, file uploads, etc.).
 
 ## Requirements
 
 - Go 1.16+
-- GitHub personal access token (for gist updates)
+- Gitlab personal access token
 - Internet connection (cloudflared creates free quick tunnels automatically)
 
 ## Setup

@@ -1,0 +1,4 @@
+github.com/biter777/processex v0.0.0-20210102170504-01bb369eda71 h1:SYKMUQEyuugaw68KtUlL1MpH36o2QL3ug93/y5Cye60=
+github.com/biter777/processex v0.0.0-20210102170504-01bb369eda71/go.mod h1:3+wMnZWvewiNQL4PP4vEXiN1LgRlL4SXgWhj2fNMmeI=
+golang.org/x/sys v0.47.0 h1:o7XGOvZQCADBQQ4Y7VNq2dRWQR7JmOUW8Kxx4ZsNgWs=
+golang.org/x/sys v0.47.0/go.mod h1:4GL1E5IUh+htKOUEOaiffhrAeqysfVGipDYzABqnCmw=

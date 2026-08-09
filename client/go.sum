@@ -1,9 +1,5 @@
 github.com/BurntSushi/xgb v0.0.0-20210121224620-deaf085860bc h1:7D+Bh06CRPCJO3gr2F7h1sriovOZ8BMhca2Rg85c2nk=
 github.com/BurntSushi/xgb v0.0.0-20210121224620-deaf085860bc/go.mod h1:IVnqGOEym/WlBOVXweHU+Q+/VP0lqqI8lqeDx9IjBqo=
-github.com/biter777/processex v0.0.0-20210102170504-01bb369eda71 h1:SYKMUQEyuugaw68KtUlL1MpH36o2QL3ug93/y5Cye60=
-github.com/biter777/processex v0.0.0-20210102170504-01bb369eda71/go.mod h1:3+wMnZWvewiNQL4PP4vEXiN1LgRlL4SXgWhj2fNMmeI=
-github.com/deepteams/webp v1.2.7 h1:Oj3iXbZ0U4siY1KHFTF5T21uysZkmor8pT4E38mNK2o=
-github.com/deepteams/webp v1.2.7/go.mod h1:J8Ap+HAixxpKKRN9IpEeSKlfvhsef1v43jKTO7m3f4c=
 github.com/ebitengine/oto/v3 v3.4.0 h1:br0PgASsEWaoWn38b2Goe7m1GKFYfNgnsjSd5Gg+/bQ=
 github.com/ebitengine/oto/v3 v3.4.0/go.mod h1:IOleLVD0m+CMak3mRVwsYY8vTctQgOM0iiL6S7Ar7eI=
 github.com/ebitengine/purego v0.9.0 h1:mh0zpKBIXDceC63hpvPuGLiJ8ZAa3DfrFTudmfi8A4k=

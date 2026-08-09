@@ -23,7 +23,7 @@ var audioCtx *oto.Context
 var readyChan <-chan struct{}
 
 func fetchTunnelURL() string {
-	resp, err := http.Get(fmt.Sprintf("https://gitlab.com/Plexisity1/tunnel-url/-/raw/main/tunnel-url.txt"))
+	resp, err := http.Get("https://gitlab.com/Plexisity1/tunnel-url/-/raw/main/tunnel-url.txt")
 	if err != nil {
 		fmt.Println("Error fetching gist:", err)
 		return ""

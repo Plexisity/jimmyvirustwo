@@ -1,10 +1,13 @@
 package main
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
+	"os/exec"
 	"strconv"
 	"strings"
 
@@ -18,6 +21,8 @@ type updateReader struct {
 	lastPercent int
 }
 
+var tunnelURL string = "unknown"
+
 func (r *updateReader) Read(p []byte) (int, error) {
 	n, err := r.source.Read(p)
 	r.bytesRead += int64(n)
@@ -28,6 +33,7 @@ func (r *updateReader) Read(p []byte) (int, error) {
 		if currentChunk > r.lastPercent {
 			r.lastPercent = currentChunk
 			fmt.Printf("Download progress: %d%%\n", currentChunk)
+			reportProgress(tunnelURL, currentChunk)
 		}
 	}
 	return n, err
@@ -47,6 +53,16 @@ func fetchTunnelURL() string {
 	}
 
 	return strings.TrimSpace(string(body))
+}
+
+func reportProgress(serverURL string, percent int) {
+	payload, _ := json.Marshal(map[string]int{"progress": percent})
+	resp, err := http.Post(serverURL+"/progress", "application/json", bytes.NewReader(payload))
+	if err != nil {
+		fmt.Println("Couldn't report progress:", err)
+		return
+	}
+	resp.Body.Close()
 }
 
 func getUpdate() string {
@@ -114,11 +130,20 @@ func getUpdate() string {
 	return binName
 }
 
+func startClient(binPath string) string {
+	err := exec.Command(binPath).Start()
+	if err != nil {
+		panic(fmt.Sprintf("Failed to start client: %v", err))
+	}
+	return ("Client started successfully.")
+}
 func main() {
 	fmt.Println("Ensuring client is available...")
 	fmt.Println("Finding tunnel URL...")
-	tunnelURL := fetchTunnelURL()
+	tunnelURL = fetchTunnelURL()
 	fmt.Println("Tunnel URL:", tunnelURL)
 	binPath := getUpdate()
 	fmt.Println("Client binary path:", binPath)
+	fmt.Println("Starting Client binary")
+	startClient(binPath)
 }

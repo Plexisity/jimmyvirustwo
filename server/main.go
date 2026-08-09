@@ -37,7 +37,7 @@ type GitLabUpdatePayload struct {
 }
 
 type ProgressReport struct {
-	Progress int `json:"progress"`
+	Progress string `json:"progress"`
 }
 
 func updateGitLabFile(projectID, filePath, gitlabToken, tunnelURL string) error {
@@ -158,7 +158,6 @@ func uploadHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleProgressUpdate(w http.ResponseWriter, r *http.Request) {
-
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -168,10 +167,11 @@ func handleProgressUpdate(w http.ResponseWriter, r *http.Request) {
 	err := json.NewDecoder(r.Body).Decode(&report)
 	if err != nil {
 		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		fmt.Println("Error decoding JSON:", err)
 		return
 	}
 
-	fmt.Printf("Client update received: %d%%\n", report.Progress)
+	fmt.Printf("Client update received: %s\n", report.Progress)
 
 	w.WriteHeader(http.StatusOK)
 }

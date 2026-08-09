@@ -1,6 +1,8 @@
 package main
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"image/png"
 	"io"
@@ -144,6 +146,17 @@ func playSound(fileName string) {
 		time.Sleep(time.Millisecond)
 	}
 }
+
+func reportProgress(serverURL string, report string) {
+	payload, _ := json.Marshal(map[string]string{"progress": report})
+	resp, err := http.Post(serverURL+"/progress", "application/json", bytes.NewReader(payload))
+	if err != nil {
+		fmt.Println("Couldn't report progress:", err)
+		return
+	}
+	resp.Body.Close()
+}
+
 func main() {
 	op := &oto.NewContextOptions{}
 	op.SampleRate = 44100
@@ -207,6 +220,7 @@ func main() {
 				fmt.Println("Playing sound...")
 				playSound(command[1])
 				fmt.Println("Sound playback finished. Deleting sound file...")
+				reportProgress(serverIp, "Sound playback finished.")
 				time.Sleep(1 * time.Second)
 				err = os.Remove(command[1])
 				if err != nil {

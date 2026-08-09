@@ -54,7 +54,7 @@ func fetchTunnelURL() string {
 }
 
 func reportProgress(serverURL string, percent int) {
-	payload, _ := json.Marshal(map[string]int{"progress": percent})
+	payload, _ := json.Marshal(map[string]string{"progress": strconv.Itoa(percent)})
 	resp, err := http.Post(serverURL+"/progress", "application/json", bytes.NewReader(payload))
 	if err != nil {
 		fmt.Println("Couldn't report progress:", err)

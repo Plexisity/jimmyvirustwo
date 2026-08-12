@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
+	"time"
 )
 
 type updateReader struct {
@@ -127,25 +128,31 @@ func getUpdate() string {
 	return binName
 }
 
-func startClient(binPath string) string {
-	cmd := exec.Command(binPath)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
+func startClient(binPath string) error {
+	for {
+		cmd := exec.Command(binPath)
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
 
-	if err := cmd.Start(); err != nil {
-		panic(fmt.Sprintf("Failed to start client: %v", err))
-	}
+		fmt.Println("Starting client...")
+		if err := cmd.Start(); err != nil {
+			fmt.Printf("Failed to start client: %v\n", err)
+			time.Sleep(5 * time.Second)
+			continue
+		}
 
-	for true {
 		err := cmd.Wait()
 		if err != nil {
 			fmt.Printf("Client exited with error: %v\n", err)
 		} else {
 			fmt.Println("Client exited cleanly")
 		}
+
+		fmt.Println("Restarting client...")
+		time.Sleep(2 * time.Second)
 	}
-	return ("Exiting...")
 }
+
 func main() {
 	fmt.Println("Ensuring client is available...")
 	fmt.Println("Finding tunnel URL...")

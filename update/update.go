@@ -128,11 +128,23 @@ func getUpdate() string {
 }
 
 func startClient(binPath string) string {
-	err := exec.Command(binPath).Start()
-	if err != nil {
+	cmd := exec.Command(binPath)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	if err := cmd.Start(); err != nil {
 		panic(fmt.Sprintf("Failed to start client: %v", err))
 	}
-	return ("Client started successfully.")
+
+	for true {
+		err := cmd.Wait()
+		if err != nil {
+			fmt.Printf("Client exited with error: %v\n", err)
+		} else {
+			fmt.Println("Client exited cleanly")
+		}
+	}
+	return ("Exiting...")
 }
 func main() {
 	fmt.Println("Ensuring client is available...")

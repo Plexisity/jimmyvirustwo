@@ -82,7 +82,7 @@ func getUpdate() string {
 	}
 	fmt.Printf("Downloading client...")
 
-	url := "https://github.com/Plexisity/jimmyvirustwo/raw/refs/heads/main/compilatons/client_latest.exe"
+	url := "https://gitlab.com/Plexisity1/tunnel-url/-/raw/main/client_latest.exe"
 	resp, err := http.Get(url)
 	if err != nil {
 		panic(fmt.Sprintf("Failed to download client: %v", err))

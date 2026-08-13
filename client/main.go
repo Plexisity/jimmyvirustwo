@@ -177,11 +177,9 @@ func playSound(fileName string) {
 	player.Play()
 
 	for player.IsPlaying() {
-		time.Sleep(time.Millisecond)
+		time.Sleep(50 * time.Millisecond)
 	}
 	file.Close()
-
-	time.Sleep(3 * time.Second)
 	err = os.Remove(fileName)
 	if err != nil {
 		fmt.Println("Error deleting sound file:", err)

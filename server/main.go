@@ -240,11 +240,17 @@ func commandHandler(w http.ResponseWriter, r *http.Request) {
 			fmt.Println("sent volume command")
 		}
 
+	case "hook":
+		fmt.Fprint(w, userInput)
+		command = nil
+		userInput = "idle"
+		fmt.Println("sent hook command")
+
 	case "help":
 		fmt.Print("\033[H\033[2J")
 
 		fmt.Print("Available commands:\n")
-		fmt.Println("  ss - Take a screenshot")
+		fmt.Println("  ss - <number> Take a screenshot")
 		fmt.Println("  sound <file> - Play audio file")
 		fmt.Println("  vol <number> - Set volume")
 		fmt.Println("  help - Show this help message")

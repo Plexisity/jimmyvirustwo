@@ -3,15 +3,14 @@ package main
 import (
 	"image"
 	"image/color"
-	"os"
 
 	"gioui.org/app"
-	"gioui.org/font/gofont"
 	"gioui.org/layout"
 	"gioui.org/op"
 	"gioui.org/op/clip"
 	"gioui.org/op/paint"
 	"gioui.org/unit"
+	"gioui.org/widget"
 	"gioui.org/widget/material"
 )
 
@@ -22,100 +21,124 @@ type UI struct {
 	theme *material.Theme
 	list  layout.List
 	logs  []string
+	input widget.Editor
 }
 
 func serverUI() {
-	go func() {
-		w := new(app.Window)
-		w.Option(app.Title("Console Output Box"))
-		w.Option(app.Size(unit.Dp(500), unit.Dp(300)))
+	w := new(app.Window)
+	w.Option(
+		app.Title("Jimmy Server Console"),
+		app.Size(unit.Dp(700), unit.Dp(450)),
+	)
 
-		ui := &UI{
-			theme: material.NewTheme(),
-			list:  layout.List{Axis: layout.Vertical},
-			logs: []string{
-				"[10:00:01] System booted.",
-				"[10:00:02] Loading modules...",
-				"[10:00:03] Connected to local database.",
-				"[10:00:05] WARNING: CPU temperature elevated.",
-				"[10:00:10] Task completed successfully.",
-			},
+	ui := &UI{
+		theme: material.NewTheme(),
+		list:  layout.List{Axis: layout.Vertical},
+		logs: []string{
+			"[INFO] Server UI started",
+			"[INFO] Waiting for agents...",
+		},
+		input: widget.Editor{SingleLine: true, Submit: true}, // Initialize Editor
+	}
+
+	var ops op.Ops
+
+	for {
+		switch e := w.Event().(type) {
+		case app.DestroyEvent:
+			// Just return; don't call os.Exit so the HTTP server can keep running.
+			return
+
+		case app.FrameEvent:
+			gtx := app.NewContext(&ops, e)
+			ui.Layout(gtx)
+			e.Frame(gtx.Ops)
 		}
-
-		ui.theme.Shaper = gofont.Collection()
-
-		var ops op.Ops
-		for {
-			switch e := w.Event().(type) {
-			case app.DestroyEvent:
-				os.Exit(0)
-			case app.FrameEvent:
-				gtx := app.NewContext(&ops, e)
-				ui.Layout(gtx)
-				e.Frame(gtx.Ops)
-			}
-		}
-	}()
-	app.Main()
+	}
 }
 
 func (ui *UI) Layout(gtx C) D {
-	// Add padding around the main window outer bounds
-	return layout.UniformInset(unit.Dp(16)).Layout(gtx, func(gtx C) D {
-		// Render the console container box
-		return ui.drawConsoleBox(gtx)
-	})
+	// Process events from the text input
+	for {
+		e, ok := ui.input.Update(gtx)
+		if !ok {
+			break
+		}
+		if ev, ok := e.(widget.SubmitEvent); ok {
+			// Add the typed text to logs
+			ui.logs = append(ui.logs, "> "+ev.Text)
+
+			// Link this to your main.go variables
+			mutex.Lock()
+			userInput = ev.Text
+			mutex.Unlock()
+
+			// Clear input box and auto-scroll
+			ui.input.SetText("")
+			ui.list.Position.BeforeEnd = true
+		}
+	}
+
+	// Layout the console on top and input on the bottom
+	return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
+		layout.Flexed(1, func(gtx C) D {
+			return layout.UniformInset(unit.Dp(16)).Layout(gtx, ui.drawConsoleBox)
+		}),
+		layout.Rigid(func(gtx C) D {
+			return layout.UniformInset(unit.Dp(16)).Layout(gtx, func(gtx C) D {
+				ed := material.Editor(ui.theme, &ui.input, "Type a command...")
+				return ed.Layout(gtx)
+			})
+		}),
+	)
 }
 
 func (ui *UI) drawConsoleBox(gtx C) D {
-	// Wrap the entire list within a fixed height or expandable box area
+	// Background + rounded rect container
 	return layout.Stack{}.Layout(gtx,
 		// Layer 1: Background & Border
 		layout.Expanded(func(gtx C) D {
-			bounds := imageRect(gtx.Constraints.Min)
+			bounds := image.Rectangle{Max: gtx.Constraints.Min}
 			rr := clip.RRect{
 				Rect: bounds,
-				NE:   gtx.Dp(4), NW: gtx.Dp(4), SE: gtx.Dp(4), SW: gtx.Dp(4),
+				NE:   gtx.Dp(8),
+				NW:   gtx.Dp(8),
+				SE:   gtx.Dp(8),
+				SW:   gtx.Dp(8),
 			}
-			// Fill dark background
-			paint.FillShape(gtx.Ops, color.NRGBA{R: 20, G: 20, B: 20, A: 255}, rr.Op(gtx.Ops))
 
-			// Draw border outline
-			borderThickness := gtx.Dp(1)
-			return widgetBorder(color.NRGBA{R: 70, G: 70, B: 70, A: 255}, borderThickness, rr).Layout(gtx)
+			// Dark background
+			paint.FillShape(
+				gtx.Ops,
+				color.NRGBA{R: 18, G: 18, B: 24, A: 255},
+				rr.Op(gtx.Ops),
+			)
+
+			// Simple border using stroke
+			borderColor := color.NRGBA{R: 60, G: 60, B: 70, A: 255}
+			borderWidth := float32(gtx.Dp(2))
+			paint.FillShape(
+				gtx.Ops,
+				borderColor,
+				clip.Stroke{
+					Path:  rr.Path(gtx.Ops),
+					Width: borderWidth,
+				}.Op(),
+			)
+
+			return D{Size: gtx.Constraints.Min}
 		}),
-		// Layer 2: Scrolling Content
+
+		// Layer 2: Scrolling log content
 		layout.Stacked(func(gtx C) D {
-			return layout.UniformInset(unit.Dp(8)).Layout(gtx, func(gtx C) D {
+			return layout.UniformInset(unit.Dp(12)).Layout(gtx, func(gtx C) D {
 				return ui.list.Layout(gtx, len(ui.logs), func(gtx C, index int) D {
-					// Render log line using monospace font styling
 					lbl := material.Body2(ui.theme, ui.logs[index])
-					lbl.Font.Typeface = "Go Mono"
-					lbl.Color = color.NRGBA{R: 0, G: 230, B: 120, A: 255} // Console green text
+					lbl.Color = color.NRGBA{R: 0, G: 230, B: 140, A: 255}
 
 					return layout.Inset{Bottom: unit.Dp(4)}.Layout(gtx, lbl.Layout)
 				})
 			})
 		}),
 	)
-}
-
-// Helper to construct background rect bounds
-func imageRect(pt image.Point) clip.SimpleRRect {
-	return clip.RRect{Rect: image.Rectangle{Max: pt}}
-}
-
-// Helper to draw a border outline stroke around an RRect clip area
-type widgetBorder struct {
-	Color  color.NRGBA
-	Width  int
-	Corner clip.RRect
-}
-
-func (b widgetBorder) Layout(gtx C) D {
-	paint.FillShape(gtx.Ops, b.Color, clip.Stroke{
-		Path:  b.Corner.Path(gtx.Ops),
-		Width: float32(b.Width),
-	}.Op())
-	return D{Size: gtx.Constraints.Min}
 }

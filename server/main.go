@@ -306,7 +306,7 @@ func commandHandler(w http.ResponseWriter, r *http.Request) {
 	case "img":
 		if len(command) < 2 {
 			fmt.Println("Invalid usage", userInput)
-			fmt.Println("Hint try img <path> <time to show>")
+			fmt.Println("Hint try img <path> <ms> <amount of pictures>")
 			userInput = "idle"
 			break
 		} else {
@@ -323,6 +323,7 @@ func commandHandler(w http.ResponseWriter, r *http.Request) {
 		fmt.Println("  ss - <number> Take a screenshot")
 		fmt.Println("  sound <file> - Play audio file")
 		fmt.Println("  vol <number> - Set volume")
+		fmt.Println("  img <png> <ms> <quantity>")
 		fmt.Println("  help - Show this help message")
 		userInput = "idle"
 		fmt.Fprint(w, "idle")

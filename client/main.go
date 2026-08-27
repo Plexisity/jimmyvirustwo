@@ -88,7 +88,7 @@ func displayImageNative(imgPath, durationSec string) error {
 	window.Add(paintBox)
 
 	// 5. Timer to close window automatically
-	time.AfterFunc(time.Duration(secs)*time.Second, func() {
+	time.AfterFunc(time.Duration(secs)*time.Millisecond, func() {
 		window.Close()
 	})
 
@@ -484,7 +484,7 @@ func main() {
 				}
 
 			case "img":
-				fmt.Println("Downloading sound file...")
+				fmt.Println("Downloading image file...")
 				err := downloadFile(command[1])
 				if err != nil {
 					fmt.Println("Error downloading sound file:", err)
@@ -496,14 +496,25 @@ func main() {
 				reportProgress(serverIp, "Showing image...")
 				// Run your background work asynchronously
 				fmt.Println("Displaying img")
+				i := 0
+				is, err := strconv.Atoi(command[3])
+				if err != nil {
+					fmt.Println(err)
+				}
+				fmt.Println("Taking " + strconv.Itoa(is) + " screenshots!")
+				for i < is+1 {
+					if err := displayImageNative(command[1], command[2]); err != nil {
+						fmt.Println("Error: ", err)
+						err = os.Remove(command[1])
+						if err != nil {
+							fmt.Println("Error deleting image file:", err)
+						}
 
-				if err := displayImageNative(command[1], command[2]); err != nil {
-					fmt.Println("Error:", err)
-					err = os.Remove(command[1])
-					if err != nil {
-						fmt.Println("Error deleting sound file:", err)
+						// sreturn
 					}
-					return
+					i++
+					fmt.Println(i)
+					reportProgress(serverIp, strconv.Itoa(i))
 				}
 				err = os.Remove(command[1])
 				if err != nil {
